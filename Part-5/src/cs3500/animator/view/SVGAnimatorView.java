@@ -1,0 +1,301 @@
+package cs3500.animator.view;
+
+import cs3500.animator.model.Motion2D;
+import cs3500.animator.model.Shape2D;
+import cs3500.animator.view.drawing.Plus;
+
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+
+/**
+ * This class visually represents the SVGAnimatorView.
+ */
+public class SVGAnimatorView implements AnimatorSVG {
+
+  private final LinkedHashMap<Shape2D, List<Motion2D>> directions;
+  private Appendable ap;
+  private final double tempo;
+
+  /**
+   * Constructs an EasyAnimatorView with a model and appendable.
+   *
+   * @param directions the directions
+   * @param ap         appendable
+   */
+
+  public SVGAnimatorView(LinkedHashMap<Shape2D, List<Motion2D>> directions, Appendable ap,
+                         double tempo) {
+    this.directions = directions;
+    this.ap = ap;
+    this.tempo = tempo;
+  }
+
+  /**
+   * Constructs an EasyAnimatorView with a model.
+   *
+   * @param directions the directions
+   */
+
+  public SVGAnimatorView(LinkedHashMap<Shape2D, List<Motion2D>> directions, double tempo) {
+    this.directions = directions;
+    this.tempo = tempo;
+  }
+
+  @Override
+  public void render() throws IOException {
+    if (ap instanceof FileWriter) {
+      FileWriter f = (FileWriter) ap;
+      f.write(this.toString());
+      f.close();
+    } else {
+      this.ap.append(this.toString());
+      this.ap.append("\n");
+    }
+  }
+
+  @Override
+  public String toString() {
+    StringBuilder svgBuild = new StringBuilder();
+    if (directions.size() == 0) {
+      return "";
+    }
+    try {
+      svgBuild.append(
+          "<svg width=\"" + 1000 + "\" height=\"" + 1000
+              + "\" version=\"" + 1.1 + "\" xmlns=\""
+              + "http:"
+              + '/' + '/' + "www.w3.org/2000/svg\""
+              + " xmlns:xlink=\"http://www.w3.org/1999/xlink\" xmlns:sketch=\""
+              + "http://www.bohemiancoding.com/sketch/ns\"> \n");
+      int motionCounter = 0;
+      for (Shape2D shape : directions.keySet()) {
+        List<Motion2D> result = directions.get(shape);
+        List<Motion2D> lom = new ArrayList<>(result);
+        String type = shape.getType();
+
+        switch (type) {
+          case "rectangle":
+          case "square":
+            svgBuild.append(rectangle(lom, motionCounter));
+            break;
+          case "ellipse":
+            svgBuild.append(ellipse(lom, motionCounter));
+            break;
+          case "circle":
+            svgBuild.append(circle(lom, motionCounter));
+            break;
+          case "plus":
+            svgBuild.append((plus(lom, motionCounter)));
+            break;
+          default:
+        }
+        motionCounter++;
+      }
+
+      svgBuild.append("</svg>");
+
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+
+    return svgBuild.toString();
+  }
+
+  private String plus(List<Motion2D> lom, int motionCounter) {
+    StringBuilder builder = new StringBuilder();
+    int h = lom.get(0).getHeight1();
+    int w = lom.get(0).getWidth1();
+    int x = lom.get(0).getX1();
+    int y = lom.get(0).getY1();
+    Motion2D motion1 = lom.get(0);
+    Plus p = new Plus(w, h, x, y - h / 4);
+    p.calculate();
+    builder.append("<polygon points=\"");
+    builder.append(p.toString());
+    builder.append("\"" + " fill=" + "\"rgb(" + motion1.getRed1() + "," + motion1.getGreen1() +
+            "," + motion1.getBlue1()
+        + ")\"> \n");
+    for (Motion2D motion : lom) {
+
+      builder.append(animateTransform(motion.getX1(), motion.getX2(), motion.getY1(),
+              motion.getY2(), motion.getTick1() / 10,
+              (motion.getTick2() - motion.getTick1()) / 10, "translate"));
+      if (motion.getRed1() != motion.getRed2() || motion.getGreen1() != motion.getGreen2()
+          || motion.getBlue1() != motion.getBlue2()) {
+        String rgb1 = new StringBuilder().append(
+            "\"rgb(" + motion.getRed1() + "," + motion.getGreen1() + "," + motion.getBlue1()
+                + ")\"").toString();
+        String rgb2 = new StringBuilder().append(
+            "\"rgb(" + motion.getRed2() + "," + motion.getGreen2() + ","
+                + motion.getBlue2() + ")\"")
+            .toString();
+        builder.append(
+            animate((int) (motion.getTick1() / tempo), (int) (motion.getTick2() / tempo),
+                "fill", rgb1, rgb2));
+      }
+    }
+    builder.append("</polygon >");
+
+    return builder.toString();
+  }
+
+  @Override
+  public String animate(int t1, int t2, String attribute, String x, String y) {
+    StringBuilder builder = new StringBuilder();
+    builder.append("<animate attributeType=\"xml\" begin=");
+    builder.append("\"" + t1 + "s\" dur=");
+    builder.append("\"" + t2 + "s\" attributeName=");
+    builder.append("\"" + attribute + "\" from=");
+    builder.append(x + " to=");
+    builder.append(y + " fill=\"freeze\" />");
+    builder.append("\n");
+    return builder.toString();
+
+  }
+
+  @Override
+  public String animateTransform(int x1, int x2, int y1, int y2, double t1, double dur,
+      String type) {
+    StringBuilder builder = new StringBuilder();
+    builder.append("<animateTransform attributeName=\"transform\" type=\"" + type + "\"");
+    builder.append(" from=\"" + x1 + " " + y1 + "\" ");
+    builder.append("to=\"" + x2 + " " + y2 + "\" ");
+    builder.append("begin=\"" + t1 + "s\" ");
+    builder.append("dur=\"" + dur + "s\" fill=\"freeze\" />");
+    builder.append("\n");
+    return builder.toString();
+
+  }
+
+  @Override
+  public String animateMotion(List<Motion2D> lom) {
+    StringBuilder builder = new StringBuilder();
+    Utilities util = new Utilities();
+    boolean isInitial = true;
+    if (lom == null) {
+      return "";
+    }
+    for (Motion2D motion : lom) {
+      if (isInitial) {
+        builder.append(
+            animateTransform(motion.getX1(), motion.getX2(), motion.getY1(), motion.getY2(),
+                (motion.getTick1() / tempo),
+                ((motion.getTick2() - motion.getTick1()) / tempo), "translate"));
+
+      }
+
+      // UPON uncommenting the below code the pyramid is centered but the motion is not accurate;
+
+      //      if (Math.abs(motion.getX2() - motion.getX1()) != 0
+      //          || Math.abs(motion.getY2() - motion.getY1()) != 0) {
+      //        builder.append(
+      //            animateTransform(motion.getX1(), motion.getX2(), motion.getY1(), motion.getY2(),
+      //                (int) (motion.getTick1() / tempo),
+      //                (int) ((motion.getTick2() - motion.getTick1()) / tempo), "translate"));
+      //
+      //      }
+      if (Math.abs(motion.getWidth2() - motion.getWidth1()) > 0) {
+
+        builder.append(animate((int) (motion.getTick1() / tempo),
+            (int) ((motion.getTick2() ) / tempo), "width", "\"" +
+                String.valueOf(motion.getWidth1()) + "\"",
+            "\"" + String.valueOf(motion.getWidth2()) + "\""));
+      }
+      if (Math.abs(motion.getHeight2() - motion.getHeight1()) > 0) {
+
+        builder.append(animate((int) (motion.getTick1() / tempo),
+            (int) ((motion.getTick2() - motion.getTick1()) / tempo), "height",
+            String.valueOf(motion.getHeight1()),
+            String.valueOf(motion.getHeight2())));
+      }
+
+      if (motion.getRed1() != motion.getRed2() || motion.getGreen1() != motion.getGreen2()
+          || motion.getBlue1() != motion.getBlue2()) {
+        String rgb1 = new StringBuilder().append(
+            "\"rgb(" + motion.getRed1() + "," + motion.getGreen1() + "," + motion.getBlue1()
+                + ")\"").toString();
+        String rgb2 = new StringBuilder().append(
+            "\"rgb(" + motion.getRed2() + "," + motion.getGreen2() + ","
+                + motion.getBlue2() + ")\"")
+            .toString();
+        builder.append(
+            animate((int) (motion.getTick1() / tempo), (int) (motion.getTick2() / tempo),
+                "fill", rgb1, rgb2));
+      }
+    }
+    return builder.toString();
+  }
+
+  @Override
+  public String rectangle(List<Motion2D> lom, int id) {
+    int x = lom.get(0).getX1();
+    int y = lom.get(0).getY1();
+    int width = lom.get(0).getWidth1();
+    int height = lom.get(0).getHeight1();
+    int r = lom.get(0).getRed1();
+    int b = lom.get(0).getBlue1();
+    int g = lom.get(0).getGreen1();
+    StringBuilder builder = new StringBuilder();
+    builder.append("<rect id=\"" + id + "\" x=");
+    builder.append("\"" + x + "\" y=");
+    builder.append("\"" + y + "\" width=");
+    builder.append("\"" + width + "\" height=");
+    builder.append("\"" + height + "\" fill=");
+    builder.append("\"rgb(" + r + "," + g + "," + b + ")\" visibility=");
+    builder.append("\"visible\" >");
+    builder.append("\n");
+    builder.append(animateMotion(lom));
+    builder.append("</rect>");
+    builder.append("\n");
+    return builder.toString();
+  }
+
+  @Override
+  public String ellipse(List<Motion2D> lom, int id) {
+    int x = lom.get(0).getX1();
+    int y = lom.get(0).getY1();
+    int width = lom.get(0).getWidth1();
+    int height = lom.get(0).getHeight1();
+    int r = lom.get(0).getRed1();
+    int b = lom.get(0).getBlue1();
+    int g = lom.get(0).getGreen1();
+    StringBuilder builder = new StringBuilder();
+    builder.append("<ellipse id=\"" + id + "\" cx=");
+    builder.append("\"" + x + "\" cy=");
+    builder.append("\"" + y + "\" rx=");
+    builder.append("\"" + width + "\" ry=");
+    builder.append("\"" + height + "\" fill=");
+    builder.append("\"rgb(" + r + "," + g + "," + b + ")\" visibility=");
+    builder.append("\"visible\" >");
+    builder.append("\n");
+    builder.append(animateMotion(lom));
+    builder.append("</ellipse>");
+    builder.append("\n");
+    return builder.toString();
+  }
+
+  @Override
+  public String circle(List<Motion2D> lom, int id) {
+    int x = lom.get(0).getX1();
+    int y = lom.get(0).getY1();
+    int width = lom.get(0).getWidth1();
+    int r = lom.get(0).getRed1();
+    int b = lom.get(0).getBlue1();
+    int g = lom.get(0).getGreen1();
+    StringBuilder builder = new StringBuilder();
+    builder.append("<circle id=\"" + id + "\" cx=");
+    builder.append("\"" + x + "\" cy=");
+    builder.append("\"" + y + "\" r=");
+    builder.append("\"" + width + "\" fill=");
+    builder.append("\"rgb(" + r + "," + g + "," + b + ")\" visibility=");
+    builder.append("\"visible\" >");
+    builder.append("\n");
+    builder.append(animateMotion(lom));
+    builder.append("</circle>");
+    builder.append("\n");
+    return builder.toString();
+  }
+}
